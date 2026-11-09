@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark" data-accent="mono" data-transparent="false" style="--veil:0.45">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+<title>CARDSAFE</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 100 100" width="20" height="20" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 9 H68 L88 29 V87 a4 4 0 0 1 -4 4 H23 a4 4 0 0 1 -4 -4 V13 a4 4 0 0 1 4 -4 Z"/><path d="M31 24.5 v21.5"/><path d="M43.5 24.5 v21.5"/><path d="M56 24.5 v21.5"/><rect x="27" y="63.5" width="46" height="19" rx="2"/></svg></div>
+      <div class="btext"><div class="bname">CARDSAFE</div><div class="bsub">素材拷卡 · 校验</div></div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item is-active" data-view="copy">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h5l2 2h6a1 1 0 0 1 1 1v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
+        拷卡
+      </button>
+      <button class="nav-item" data-view="history">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4h4"/><path d="M12 8v4.5l3 1.8"/></svg>
+        记录
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        设置
+      </button>
+      <button class="nav-item" data-view="about">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11.2v5"/><circle cx="12" cy="7.9" r=".95" fill="currentColor" stroke="none"/></svg>
+        关于
+      </button>
+    </nav>
+
+    <div class="nav-sep"></div>
+
+    <div class="recent">
+      <div class="recent-head"><b>最近完成</b><span id="recentCount"></span></div>
+      <div class="recent-list" id="recentList"></div>
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="side-update" id="btnSideUpdate" title="检查是否有新版本">
+        <svg class="su-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3.5V9h-5.5"/></svg>
+        <span class="su-dot" id="suDot"></span>
+        <span id="sideUpdateText">检查更新</span>
+      </button>
+      <div class="queue-pill" id="queuePill"><span class="dot"></span><span id="queueText">空闲</span></div>
+      <div class="ver" id="verText">v1.3.3</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-title" id="viewTitle">拷卡</div>
+      <div class="topbar-actions">
+        <button class="btn ghost sm" id="btnRefresh">刷新设备</button>
+      </div>
+    </header>
+
+    <div class="update-bar hidden" id="updateBar">
+      <span class="ub-dot"></span>
+      <div class="ub-text" id="ubText">发现新版本</div>
+      <div class="ub-actions">
+        <button class="btn ghost xs" id="ubSkip">跳过此版本</button>
+        <button class="btn primary sm" id="ubAction">下载更新</button>
+      </div>
+    </div>
+
+    <div class="scroll" id="scrollArea">
+
+      <!-- ============================ 拷卡 ============================ -->
+      <section class="view is-active" id="view-copy">
+          <!-- 顶部概览 -->
+          <div class="hero">
+            <div class="hero-l">
+              <div class="hero-title" id="heroTitle">未选择素材卡</div>
+              <div class="hero-meta">
+                <span class="pill" id="heroPill"><i></i>等待设备</span>
+                <span class="mono hero-path" id="heroPath">插入读卡器，或手动选择文件夹</span>
+              </div>
+            </div>
+            <div class="hero-r">
+              <div class="hero-state" id="heroState">拷贝等待中</div>
+              <div class="hero-pct"><span id="heroPct">0</span><em>%</em></div>
+            </div>
+          </div>
+
+        <div id="copyForm">
+          <div class="actionbar">
+            <div class="est" id="estBox">
+              <div class="est-label">待拷贝</div>
+              <div class="est-value" id="estValue">—</div>
+            </div>
+            <button class="btn primary lg" id="btnStart" disabled>开始拷卡</button>
+          </div>
+
+          <div class="gcard">
+            <header class="gcard-h">
+              <span class="gh-ico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 11h18"/></svg>
+              </span>
+              <h2>素材来源</h2>
+              <span class="hint" id="volHint">插入读卡器后自动识别</span>
+            </header>
+            <div class="vol-grid" id="volGrid"></div>
+            <div class="src-selected hidden" id="srcSelected">
+              <div class="src-main">
+                <div class="src-icon">
+                  <svg viewBox="0 0 100 100" width="16" height="16" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 9 H68 L88 29 V87 a4 4 0 0 1 -4 4 H23 a4 4 0 0 1 -4 -4 V13 a4 4 0 0 1 4 -4 Z"/><path d="M31 24.5 v21.5"/><path d="M43.5 24.5 v21.5"/><path d="M56 24.5 v21.5"/><rect x="27" y="63.5" width="46" height="19" rx="2"/></svg>
+                </div>
+                <div class="src-info">
+                  <div class="src-name" id="srcName">—</div>
+                  <div class="src-meta" id="srcMeta">—</div>
+                </div>
+              </div>
+              <div class="src-actions">
+                <button class="btn ghost sm" id="btnEject">弹出</button>
+                <button class="btn ghost sm" id="btnBrowseSrc">浏览其他…</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="gcard">
+            <header class="gcard-h">
+              <span class="gh-ico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h5l2 2h6a1 1 0 0 1 1 1v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
+              </span>
+              <h2>拷贝目的地</h2>
+              <span class="hint">一张卡可同时备份到多个磁盘</span>
+              <button class="btn ghost sm gh-act" id="btnAddDest">+ 添加</button>
+            </header>
+            <div class="dest-list" id="destList"></div>
+
+            <div class="tpl-row">
+              <label class="lbl">文件夹命名</label>
+              <div class="tpl-input-wrap">
+                <input class="input mono" id="tplInput" value="{date}_{card}" spellcheck="false" />
+                <div class="chips" id="tplChips">
+                  <button data-t="{date}">日期</button>
+                  <button data-t="{time}">时间</button>
+                  <button data-t="{project}">项目</button>
+                  <button data-t="{card}">卡片名</button>
+                  <button data-t="{camera}">机型</button>
+                </div>
+              </div>
+            </div>
+            <div class="tpl-preview" id="tplPreview">预览：—</div>
+          </div>
+
+          <div class="gcard">
+            <header class="gcard-h">
+              <span class="gh-ico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+              </span>
+              <h2>拷卡选项</h2>
+            </header>
+            <div class="opt-grid">
+              <div class="field">
+                <label class="lbl">项目名称</label>
+                <input class="input" id="projectInput" placeholder="例如：品牌片_2026Q4" />
+              </div>
+              <div class="field">
+                <label class="lbl">校验方式</label>
+                <select class="input" id="verifySelect">
+                  <option value="hash">哈希校验（推荐）</option>
+                  <option value="size">仅比对文件大小</option>
+                  <option value="none">不校验（最快）</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="lbl">哈希算法</label>
+                <select class="input" id="algoSelect">
+                  <option value="sha256">SHA-256</option>
+                  <option value="md5">MD5</option>
+                  <option value="sha1">SHA-1</option>
+                  <option value="blake2b512">BLAKE2b-512</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="lbl">并发数</label>
+                <select class="input" id="concSelect">
+                  <option value="2">2（稳定）</option>
+                  <option value="4" selected>4（推荐）</option>
+                  <option value="8">8（SSD 阵列）</option>
+                </select>
+              </div>
+            </div>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" id="optSkipJunk" checked /><span class="tk"></span><span>跳过系统垃圾文件<em>（.DS_Store / ._* / Thumbs.db）</em></span></label>
+              <label class="toggle"><input type="checkbox" id="optSkipExist" /><span class="tk"></span><span>跳过已存在且大小一致的文件<em>（断点续拷）</em></span></label>
+              <label class="toggle"><input type="checkbox" id="optKeepTime" checked /><span class="tk"></span><span>保留原始时间戳</span></label>
+              <label class="toggle"><input type="checkbox" id="optAutoReport" checked /><span class="tk"></span><span>完成后自动生成报告<em>（PDF）</em></span></label>
+              <label class="toggle"><input type="checkbox" id="optAutoEject" /><span class="tk"></span><span>完成后自动弹出素材卡</span></label>
+              <label class="toggle"><input type="checkbox" id="optTranscode" /><span class="tk"></span><span>同时生成代理文件<em>（需 ffmpeg）</em></span></label>
+            </div>
+          </div>
+
+
+        </div>
+
+        <!-- 运行面板 -->
+        <div class="run hidden" id="runPanel">
+          <div class="run-head">
+            <div>
+              <div class="run-status" id="runStatus">正在拷贝…</div>
+              <div class="run-sub" id="runSub">—</div>
+            </div>
+            <div class="run-ring">
+              <svg viewBox="0 0 120 120" width="104" height="104">
+                <circle cx="60" cy="60" r="52" class="ring-bg"/>
+                <circle cx="60" cy="60" r="52" class="ring-fg" id="ringFg"/>
+              </svg>
+              <div class="ring-num" id="ringNum">0%</div>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat"><div class="k">已拷贝</div><div class="v" id="stCopied">—</div></div>
+            <div class="stat"><div class="k">速度</div><div class="v" id="stSpeed">—</div></div>
+            <div class="stat"><div class="k">剩余时间</div><div class="v" id="stEta">—</div></div>
+            <div class="stat"><div class="k">文件</div><div class="v" id="stFiles">—</div></div>
+            <div class="stat"><div class="k">失败</div><div class="v" id="stFail">0</div></div>
+          </div>
+
+          <div class="dest-progress" id="destProgress"></div>
+
+          <div class="current-file mono" id="curFile">—</div>
+
+          <div class="log-head">
+            <span>运行日志</span>
+            <button class="btn ghost xs" id="btnToggleLog">收起</button>
+          </div>
+          <div class="log" id="logBox"></div>
+
+          <div class="actionbar inrun">
+            <button class="btn danger" id="btnCancel">取消任务</button>
+            <button class="btn primary hidden" id="btnNewTask">再来一单</button>
+            <button class="btn ghost hidden" id="btnOpenReport">打开报告</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ 记录 ============================ -->
+      <section class="view" id="view-history">
+        <div class="hist-head">
+          <div class="hist-summary" id="histSummary"></div>
+          <button class="btn ghost sm" id="btnClearHist">清空记录</button>
+        </div>
+        <div class="hist-list" id="histList"></div>
+      </section>
+
+      <!-- ============================ 设置 ============================ -->
+      <section class="view" id="view-settings">
+        <div class="card">
+          <div class="card-head"><h3>外观</h3><p>默认黑白界面，可跟随时间自动切换白天 / 夜间</p></div>
+          <div class="field">
+            <label class="lbl">主题</label>
+            <div class="seg" id="themeSeg">
+              <button data-mode="auto">跟随时间</button>
+              <button data-mode="light">白天</button>
+              <button data-mode="dark">夜间</button>
+            </div>
+          </div>
+          <div class="field" style="margin-top:14px">
+            <label class="lbl">配色</label>
+            <div class="rgb-picker">
+              <label class="rgb-chip" title="选择颜色">
+                <input type="color" id="accentColor" value="#e8ebef" />
+                <i class="rgb-swatch" id="accentSwatch"></i>
+              </label>
+              <div class="rgb-fields">
+                <label class="rgb-f"><span>R</span><input type="number" id="accentR" min="0" max="255" value="232" /></label>
+                <label class="rgb-f"><span>G</span><input type="number" id="accentG" min="0" max="255" value="235" /></label>
+                <label class="rgb-f"><span>B</span><input type="number" id="accentB" min="0" max="255" value="239" /></label>
+                <span class="rgb-hex mono" id="accentHex">#E8EBEF</span>
+              </div>
+              <button class="btn ghost sm" id="btnMonoAccent">恢复默认</button>
+            </div>
+          </div>
+          <div class="toggles" style="margin-top:14px">
+            <label class="toggle"><input type="checkbox" id="setTransparent" /><span class="tk"></span><span>背景透明<em>（透出桌面，可调透明度）</em></span></label>
+          </div>
+          <div class="opacity-row" id="opacityRow">
+            <span class="op-label">透明度</span>
+            <input type="range" id="transparentLevel" min="0" max="100" step="1" value="55" />
+            <span class="op-val mono" id="transparentVal">55%</span>
+          </div>
+          <div class="opacity-scale" id="opacityScale"><span>不透明</span><span>最透明</span></div>
+          <div class="theme-hint" id="themeHint">—</div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>默认目标</h3><p>新建任务时自动填入的目标路径</p></div>
+          <div class="dest-list" id="setDestList"></div>
+          <button class="btn dashed sm" id="btnAddDefaultDest">+ 添加默认目标</button>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>报告与通知</h3><p>每个任务结束自动生成 PDF 报告</p></div>
+          <div class="field row">
+            <label class="lbl">报告保存目录</label>
+            <div class="inline">
+              <input class="input mono" id="setReportDir" readonly placeholder="默认：文稿 / CardSafe 拷卡报告" />
+              <button class="btn ghost sm" id="btnPickReportDir">选择</button>
+            </div>
+          </div>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="setNotifySystem" checked /><span class="tk"></span><span>系统通知</span></label>
+          </div>
+          <div class="sub-block">
+            <div class="sub-title">邮件通知（SMTP）</div>
+            <label class="toggle"><input type="checkbox" id="setEmailOn" /><span class="tk"></span><span>启用邮件推送</span></label>
+            <div class="grid2">
+              <div class="field"><label class="lbl">SMTP 服务器</label><input class="input" id="setEmailHost" placeholder="smtp.qq.com" /></div>
+              <div class="field"><label class="lbl">端口</label><input class="input" id="setEmailPort" placeholder="465" /></div>
+              <div class="field"><label class="lbl">账号</label><input class="input" id="setEmailUser" placeholder="you@qq.com" /></div>
+              <div class="field"><label class="lbl">授权码 / 密码</label><input class="input" id="setEmailPass" type="password" /></div>
+              <div class="field"><label class="lbl">收件人</label><input class="input" id="setEmailTo" placeholder="a@x.com, b@y.com" /></div>
+            </div>
+          </div>
+          <div class="sub-block">
+            <div class="sub-title">Webhook 推送</div>
+            <label class="toggle"><input type="checkbox" id="setHookOn" /><span class="tk"></span><span>启用 Webhook（Bark / Server酱 / 钉钉 / 企业微信）</span></label>
+            <input class="input mono" id="setHookUrl" placeholder="https://api.day.app/xxxx/ 或 群机器人 Webhook" />
+          </div>
+          <div class="inline end">
+            <button class="btn ghost sm" id="btnTestNotify">发送测试通知</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>代理转码</h3><p>需要系统内可执行的 ffmpeg</p></div>
+          <div class="field row">
+            <label class="lbl">ffmpeg 路径</label>
+            <div class="inline">
+              <input class="input mono" id="setFfmpeg" placeholder="留空则自动在 PATH 中查找" />
+              <button class="btn ghost sm" id="btnPickFfmpeg">选择</button>
+              <button class="btn ghost sm" id="btnCheckFfmpeg">检测</button>
+            </div>
+          </div>
+          <div class="hint-line" id="ffmpegHint">—</div>
+          <div class="field">
+            <label class="lbl">转码预设</label>
+            <select class="input" id="setPreset">
+              <option value="proxy_h264">H.264 代理（540p）</option>
+              <option value="proxy_prores">ProRes Proxy（422）</option>
+              <option value="preview_720">H.264 预览（720p）</option>
+              <option value="archive_hevc">HEVC 归档</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>软件更新</h3><p>当前版本 <span class="mono" id="setCurVer">—</span></p></div>
+          <div class="field row">
+            <label class="lbl">更新源</label>
+            <div class="inline">
+              <input class="input mono" id="setFeedUrl" placeholder="https://…/latest.json 或 GitHub Releases API 地址" spellcheck="false" />
+              <button class="btn ghost sm" id="btnCheckUpdate">检查更新</button>
+            </div>
+          </div>
+          <div class="hint-line" id="updateHint">—</div>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="setUpdateAuto" checked /><span class="tk"></span><span>启动时自动检查更新</span></label>
+          </div>
+          <div class="update-progress hidden" id="updateProgress">
+            <div class="upbar"><i id="upbarFill"></i></div>
+            <div class="upmeta"><span id="upPercent">0%</span><span id="upSpeed"></span></div>
+          </div>
+          <div class="inline end">
+            <button class="btn primary sm hidden" id="btnDownloadUpdate">下载更新</button>
+            <button class="btn primary sm hidden" id="btnInstallUpdate">重启并安装</button>
+            <button class="btn ghost sm hidden" id="btnUpdateNotes">查看更新说明</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ 关于 ============================ -->
+      <section class="view" id="view-about">
+        <div class="about-hero">
+          <div class="ah-logo">
+            <svg viewBox="0 0 100 100" width="32" height="32" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 9 H68 L88 29 V87 a4 4 0 0 1 -4 4 H23 a4 4 0 0 1 -4 -4 V13 a4 4 0 0 1 4 -4 Z"/><path d="M31 24.5 v21.5"/><path d="M43.5 24.5 v21.5"/><path d="M56 24.5 v21.5"/><rect x="27" y="63.5" width="46" height="19" rx="2"/></svg>
+          </div>
+          <div>
+            <div class="ah-name">CARDSAFE</div>
+            <div class="ah-sub">素材拷卡与校验工具</div>
+            <div class="ah-ver" id="aboutVer">v1.3.3</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>作者</h3></div>
+          <div class="author-row">
+            <div class="author-avatar">黄</div>
+            <div>
+              <div class="author-name">黄溢球</div>
+              <div class="author-note">设计与开发</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>它做什么</h3></div>
+          <p class="about-p">面向影视 DIT、摄影师与剪辑师的素材备份工具：
+          单次读取素材卡，同时写入多个目标磁盘，逐目标回读哈希校验，并生成可归档的拷卡报告。</p>
+          <ul class="about-list">
+            <li>单读多写 · 一张卡同时备份到 N 个磁盘</li>
+            <li>SHA-256 / MD5 / SHA-1 / BLAKE2b 双哈希复核，失败自动重拷</li>
+            <li>PDF 拷卡报告 + CSV 全量清单 + 整卡指纹</li>
+            <li>命名模板、断点续拷、保留时间戳、完成后安全弹出</li>
+            <li>应用内检查更新，下载后校验 SHA-256 再安装</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>数据与隐私</h3></div>
+          <p class="about-p">全部处理都在本机完成。素材卡以只读方式访问，不做任何写回、移动或删除；
+          不上传任何文件、路径或哈希。更新功能仅在检查版本时请求你配置的更新源。</p>
+        </div>
+
+        <div class="card about-foot">
+          <span>© 2026 黄溢球 · CARDSAFE</span>
+          <span class="mono" id="aboutEnv">—</span>
+        </div>
+      </section>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+<script src="app.js"></script>
+</body>
+</html>

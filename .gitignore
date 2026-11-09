@@ -1,0 +1,14 @@
+# 依赖与构建产物
+node_modules/
+dist/
+out/
+
+# 系统与编辑器
+.DS_Store
+*.log
+npm-debug.log*
+
+# 根目录临时截图（docs/ 下的项目截图会保留）
+/*.png
+/*.jpg
+/tmp*/
