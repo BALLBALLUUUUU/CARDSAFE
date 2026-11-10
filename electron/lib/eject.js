@@ -1,13 +1,32 @@
 'use strict';
+const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const pexec = promisify(execFile);
 
+/** /Volumes/Untitled/M4ROOT/CLIP → /Volumes/Untitled（diskutil 只认卷根，传子目录会 Failed to find disk） */
+function volumeRoot(p) {
+  const parts = path.normalize(String(p)).split('/').filter(Boolean);
+  if (parts[0] === 'Volumes' && parts[1]) return '/Volumes/' + parts[1];
+  return String(p);
+}
+
 /** 安全弹出卷 */
 async function ejectVolume(volumePath) {
   if (process.platform === 'darwin') {
-    const { stdout } = await pexec('diskutil', ['eject', volumePath], { timeout: 30000 });
-    return { ok: true, message: stdout.trim() };
+    const target = volumeRoot(volumePath);
+    try {
+      const { stdout } = await pexec('diskutil', ['eject', target], { timeout: 30000 });
+      return { ok: true, message: stdout.trim() || `已弹出 ${target}` };
+    } catch (e) {
+      // 卷仍被占用时退一步：只卸载（不做物理弹出），至少让卡可以安全拔除
+      try {
+        const { stdout } = await pexec('diskutil', ['unmount', target], { timeout: 30000 });
+        return { ok: true, message: (stdout.trim() || `已卸载 ${target}`) + '（未能物理弹出，可拔出读卡器）' };
+      } catch {
+        return { ok: false, message: `弹出失败 ${target}：${e.message}` };
+      }
+    }
   }
   if (process.platform === 'win32') {
     const letter = volumePath.replace(/[\\/]+$/, '');

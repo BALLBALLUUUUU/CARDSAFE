@@ -481,7 +481,8 @@ function setRing(pct) {
 
 /* ---------------- 进度 ---------------- */
 appApi.onProgress((st) => {
-  if (st.taskId !== S.taskId && S.taskId) return;
+  // 只有两边都有 id 且不一致时才丢弃；id 缺失时照常渲染，避免整段进度被静默吞掉
+  if (S.taskId && st.taskId && st.taskId !== S.taskId) return;
   renderHero(st);
   const pct = st.totalBytes > 0 ? st.copiedBytes / st.totalBytes : 0;
   setRing(pct);
@@ -552,6 +553,14 @@ appApi.onTranscode((p) => {
 appApi.onTaskDone((d) => {
   S.reportPath = d.reportPath || '';
   renderHero({ phase: d.phase, totalBytes: d.bytes, copiedBytes: d.phase === 'cancelled' ? 0 : d.bytes });
+  // 收尾时补齐统计卡片：否则进度事件停止后这几格会永远停在「—」
+  const doneBytes = d.phase === 'cancelled' ? 0 : d.bytes;
+  $('stCopied').textContent = `${fmtBytes(doneBytes)} / ${fmtBytes(d.bytes)}`;
+  $('stSpeed').textContent = fmtSpeed(d.speed);
+  $('stEta').textContent = '--';
+  $('stFiles').textContent = `${d.files} / ${d.files}`;
+  $('stFail').textContent = String(d.failed || 0);
+  $('stFail').classList.toggle('bad', (d.failed || 0) > 0);
   $('btnCancel').classList.add('hidden');
   $('btnNewTask').classList.remove('hidden');
   if (S.reportPath) $('btnOpenReport').classList.remove('hidden');

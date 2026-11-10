@@ -125,6 +125,18 @@ function ok(name) { passed++; console.log('  ✓', name); }
   assert.strictEqual(r4.state.phase, 'failed');
   ok('目标不可写时正确报错并终止');
 
+  // ---- 6. 进度事件的 taskId 必须与主进程 job.id 一致（回归：曾导致界面永远 0%） ----
+  const emitted = [];
+  const r5 = await runCopyJob({
+    id: 'CS_ID_ONLY', source: CARD, // 主进程用的是 id，没有 taskId 字段
+    destinations: [{ base: path.join(ROOT, 'destD'), root: path.join(ROOT, 'destD', 'proj') }],
+    algorithm: 'md5', options: { verify: 'hash' },
+  }, { onProgress: (s) => emitted.push(s) });
+  assert.strictEqual(r5.state.taskId, 'CS_ID_ONLY', 'state.taskId 未回落到 job.id');
+  assert.ok(emitted.length > 0, '未发出任何进度事件');
+  for (const s of emitted) assert.strictEqual(s.taskId, 'CS_ID_ONLY', '进度事件 taskId 不一致，渲染层会丢弃');
+  ok(`进度事件 taskId 正确：job.id 回落生效（${emitted.length} 次事件）`);
+
   console.log(`\n全部通过：${passed} 项检查`);
   await fsp.rm(ROOT, { recursive: true, force: true }).catch(() => {});
   process.exit(0);

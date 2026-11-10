@@ -127,7 +127,9 @@ async function hashFile(p, algorithm, onBytes, flag) {
 
 function makeEmptyState(job) {
   return {
-    taskId: job.taskId,
+    // 任务 id 在主进程里叫 job.id；测试/自检脚本传的是 job.taskId。
+    // 两者都要认，否则进度事件的 taskId 为 undefined，渲染层会当作“别人的任务”整段丢弃。
+    taskId: job.taskId || job.id,
     phase: 'pending',
     totalFiles: 0,
     doneFiles: 0,
@@ -245,6 +247,7 @@ async function runCopyJob(job, hooks = {}) {
 
     // ---------- 3. 拷贝 ----------
     state.phase = 'copying';
+    log({ level: 'info', msg: `开始拷贝：${files.length} 个文件 → ${job.destinations.length} 个目标（${job.algorithm.toUpperCase()} 校验）` });
     const destStates = state.dests;
     let idx = 0;
 

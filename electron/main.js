@@ -231,6 +231,7 @@ async function enqueue(spec) {
 
   const job = {
     id,
+    taskId: id, // 与 id 同值，供进度事件与渲染层比对
     source: spec.sourcePath,
     sourcePath: spec.sourcePath,
     cardLabel: spec.cardLabel || path.basename(spec.sourcePath),
