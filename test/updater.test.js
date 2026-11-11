@@ -72,6 +72,31 @@ function serve(dir) {
   assertEq(gh.artifact.sha256, 'deadbeef', 'GitHub digest 去前缀');
   ok('GitHub Release 清单解析（自动挑当前平台资源）');
 
+  /* ===== 2a. Windows 多个 exe 时优先选安装包（Setup），别错拿便携版 ===== */
+  const savedPlatform2 = process.platform;
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  const ghWin = normalizeManifest({
+    tag_name: 'v1.3.5',
+    // 便携版按字母序排在前面，安装包必须仍然胜出
+    assets: [
+      { name: 'CARDSAFE 1.3.5.exe', browser_download_url: 'https://x/portable.exe', size: 1 },
+      { name: 'CARDSAFE Setup 1.3.5.exe', browser_download_url: 'https://x/setup.exe', size: 2 },
+      { name: 'CARDSAFE-1.3.5-arm64-mac.zip', browser_download_url: 'https://x/mac.zip', size: 3 },
+    ],
+  });
+  assertEq(ghWin.artifact.url, 'https://x/setup.exe', 'win 应优先选 Setup 安装包');
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  const ghMac = normalizeManifest({
+    tag_name: 'v1.3.5',
+    assets: [
+      { name: 'CARDSAFE 1.3.5.exe', browser_download_url: 'https://x/portable.exe', size: 1 },
+      { name: 'CARDSAFE-1.3.5-arm64-mac.zip', browser_download_url: 'https://x/mac.zip', size: 3 },
+    ],
+  });
+  assertEq(ghMac.artifact.url, 'https://x/mac.zip', 'mac 应选 arm64 zip');
+  Object.defineProperty(process, 'platform', { value: savedPlatform2, configurable: true });
+  ok('GitHub 资源选择（win 优先 Setup，mac 选 arm64 zip）');
+
   /* ===== 2b. 仓库地址 → Releases API 换算 ===== */
   const API = 'https://api.github.com/repos/BALLBALLUUUUU/CARDSAFE/releases/latest';
   assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE'), API, '仓库主页');

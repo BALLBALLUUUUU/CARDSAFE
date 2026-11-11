@@ -131,7 +131,11 @@ function normalizeManifest(raw) {
     const version = String(raw.tag_name || raw.name || '').replace(/^v/i, '');
     if (!version) throw new Error('GitHub Release 缺少 tag 名称');
     const assets = Array.isArray(raw.assets) ? raw.assets : [];
-    const hit = assets.find((a) => matchGitHubAsset(a.name || ''));
+    const cands = assets.filter((a) => matchGitHubAsset(a.name || ''));
+    // Windows：优先选 NSIS 安装包（支持 /S 静默升级），便携 exe 只作兜底
+    const hit = (process.platform === 'win32')
+      ? (cands.find((a) => /setup|install/i.test(a.name || '')) || cands[0])
+      : cands[0];
     if (!hit) throw new Error(`该 Release 里没有适配 ${platformKey()} 的安装包`);
     const digest = String(hit.digest || '').replace(/^sha256:/i, '').toLowerCase();
     return {
