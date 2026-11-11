@@ -24,7 +24,7 @@ const DEFAULT_SETTINGS = {
   transcode: { enabled: false, preset: 'proxy_h264', ffmpegPath: '', onlyMedia: true },
   update: {
     auto: true,             // 启动后自动检查
-    feedUrl: '',            // latest.json 或 GitHub Releases API
+    feedUrl: 'https://github.com/BALLBALLUUUUU/CARDSAFE', // 仓库地址 / latest.json / Releases API 均可
     skippedVersion: '',     // 用户选择"跳过此版本"
   },
   reportDir: '',

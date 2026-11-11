@@ -96,9 +96,27 @@ function platformKey() {
 
 function matchGitHubAsset(name) {
   const n = name.toLowerCase();
-  if (process.platform === 'win32') return /\.exe$/.test(n) && !/\.blockmap$/.test(n);
+  if (/\.blockmap$/.test(n)) return false;
+  if (process.platform === 'win32') {
+    if (/\.exe$/.test(n)) return true;                       // NSIS 安装包优先
+    return /\.zip$/.test(n) && (n.includes('win') || n.includes('windows')); // 便携 zip 兜底
+  }
   if (process.platform === 'darwin') return /\.zip$/.test(n) && (n.includes(process.arch) || n.includes('universal'));
   return /\.(zip|appimage|tar\.gz)$/.test(n);
+}
+
+/**
+ * 用户可以直接填 GitHub 仓库地址，这里统一换算成 Releases API：
+ *   https://github.com/OWNER/REPO            → https://api.github.com/repos/OWNER/REPO/releases/latest
+ *   https://github.com/OWNER/REPO/releases   → 同上（/releases/latest 也一样）
+ * 其他地址（自建 latest.json、API 地址）原样返回。
+ */
+function resolveFeedUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  let m = u.match(/^https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/releases(?:\/latest)?)?\/?$/i);
+  if (m) return `https://api.github.com/repos/${m[1]}/${m[2]}/releases/latest`;
+  return u;
 }
 
 /**
@@ -251,9 +269,9 @@ class Updater {
 
   get feedUrl() {
     // 便于测试/企业内网分发的覆盖方式
-    if (process.env.CARDSAFE_FEED_URL) return process.env.CARDSAFE_FEED_URL.trim();
+    if (process.env.CARDSAFE_FEED_URL) return resolveFeedUrl(process.env.CARDSAFE_FEED_URL);
     const s = this.store.getSettings();
-    return (s.update && s.update.feedUrl || '').trim();
+    return resolveFeedUrl((s.update && s.update.feedUrl || '').trim());
   }
 
   get autoCheck() {
@@ -289,10 +307,15 @@ class Updater {
       this.setState({ status: 'available' });
       return { ok: true, uptodate: false, version: m.version, notes: m.notes, size: m.artifact.size };
     } catch (e) {
-      this.setState({ status: 'error', error: e.message });
-      if (!this.app.isPackaged) console.error('[updater] 检查失败：' + e.message);
-      if (!silent) throw e;
-      return { ok: false, reason: e.message };
+      let msg = e.message;
+      // 仓库还没有发布过 Release（或私有仓库未授权）时 GitHub 返回 404，给出人话提示
+      if (/404/.test(msg) && /api\.github\.com\//.test(url)) {
+        msg = '该 GitHub 仓库还没有发布 Release，请先在 Releases 页面发布一个版本并上传安装包';
+      }
+      this.setState({ status: 'error', error: msg });
+      if (!this.app.isPackaged) console.error('[updater] 检查失败：' + msg);
+      if (!silent) throw new Error(msg);
+      return { ok: false, reason: msg };
     }
   }
 
@@ -391,4 +414,4 @@ class Updater {
   }
 }
 
-module.exports = { Updater, compareVersions, normalizeManifest, parseVer, platformKey, macInstallScript };
+module.exports = { Updater, compareVersions, normalizeManifest, parseVer, platformKey, resolveFeedUrl, matchGitHubAsset, macInstallScript };

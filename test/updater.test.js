@@ -11,7 +11,7 @@ const http = require('http');
 const crypto = require('crypto');
 const assert = require('assert');
 
-const { Updater, compareVersions, normalizeManifest } = require('../electron/lib/updater');
+const { Updater, compareVersions, normalizeManifest, resolveFeedUrl, matchGitHubAsset } = require('../electron/lib/updater');
 
 const assertEq = (a, b, msg) => assert.strictEqual(a, b, `${msg}（期望 ${b}，实际 ${a}）`);
 let passed = 0;
@@ -71,6 +71,31 @@ function serve(dir) {
   assertEq(gh.version, '1.2.0', 'GitHub tag 去 v');
   assertEq(gh.artifact.sha256, 'deadbeef', 'GitHub digest 去前缀');
   ok('GitHub Release 清单解析（自动挑当前平台资源）');
+
+  /* ===== 2b. 仓库地址 → Releases API 换算 ===== */
+  const API = 'https://api.github.com/repos/BALLBALLUUUUU/CARDSAFE/releases/latest';
+  assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE'), API, '仓库主页');
+  assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE/'), API, '带尾斜杠');
+  assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE/releases'), API, '/releases');
+  assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE/releases/latest'), API, '/releases/latest');
+  assertEq(resolveFeedUrl('https://github.com/BALLBALLUUUUU/CARDSAFE.git'), API, '带 .git');
+  assertEq(resolveFeedUrl(API), API, 'API 地址原样');
+  assertEq(resolveFeedUrl('https://dl.example.com/cardsafe/latest.json'), 'https://dl.example.com/cardsafe/latest.json', '自建清单不动');
+  assertEq(resolveFeedUrl(''), '', '空地址');
+  ok('GitHub 仓库地址自动换算为 Releases API');
+
+  /* ===== 2c. GitHub 资源匹配：Windows 便携 zip 也能被选中 ===== */
+  const savedPlatform = process.platform;
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  assert.ok(matchGitHubAsset('CardSafe-1.3.4-win-x64-portable.zip'), 'win 便携 zip 应匹配');
+  assert.ok(matchGitHubAsset('CardSafe Setup 1.3.4.exe'), 'NSIS exe 应匹配');
+  assert.ok(!matchGitHubAsset('CARDSAFE-1.3.4-arm64-mac.zip'), 'mac zip 不该匹配 win');
+  assert.ok(!matchGitHubAsset('CardSafe-1.3.4-win-x64-portable.zip.blockmap'), 'blockmap 不该匹配');
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  assert.ok(matchGitHubAsset('CARDSAFE-1.3.4-arm64-mac.zip'), 'mac arm64 zip 应匹配');
+  assert.ok(!matchGitHubAsset('CardSafe-1.3.4-win-x64-portable.zip'), 'win zip 不该匹配 mac');
+  Object.defineProperty(process, 'platform', { value: savedPlatform, configurable: true });
+  ok('GitHub 资源匹配（win 便携 zip / blockmap 排除）');
 
   /* ===== 3. 检查 → 下载 → 校验 ===== */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cardsafe-upd-'));
