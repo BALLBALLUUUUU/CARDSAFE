@@ -616,7 +616,7 @@ function renderRecent() {
     const t = h.endedAt ? new Date(h.endedAt) : (h.startedAt ? new Date(h.startedAt) : null);
     const hm = t ? `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '--:--';
     const ok = h.phase === 'done';
-    return `<button class="recent-item${h.id === detailId ? ' is-open' : ''}" data-id="${esc(h.id)}">
+    return `<button class="recent-item${h.id === focusId ? ' is-open' : ''}" data-id="${esc(h.id)}">
       <span class="ri-top"><i class="ri-dot ${ok ? '' : 'fail'}"></i><span class="ri-name">${esc(name)}</span></span>
       <span class="ri-meta">${hm} · ${h.totalFiles || 0} 个 · ${fmtBytes(h.totalBytes || 0)}</span>
     </button>`;
@@ -645,7 +645,7 @@ async function renderHistory() {
     const tagCls = phase === 'done' ? '' : phase === 'cancelled' ? 'cancel' : 'fail';
     const tagText = { done: '校验通过', cancelled: '已取消', running: '进行中', failed: '有异常', queued: '排队中' }[phase] || phase;
     const dur = h.startedAt && h.endedAt ? ` · 耗时 ${fmtDur(h.endedAt - h.startedAt)}` : '';
-    return `<div class="hist${h.id === detailId ? ' is-open' : ''}" data-id="${esc(h.id)}">
+    return `<div class="hist${h.id === focusId ? ' is-open' : ''}" data-id="${esc(h.id)}">
       <span class="hist-badge ${badgeCls}"></span>
       <div class="hist-main">
         <div class="hist-title">${esc(h.project || h.sourcePath.split(/[\\/]/).pop())}
@@ -696,7 +696,8 @@ function scrollToHistRow(id) {
 }
 
 /* ---------------- 记录详情 ---------------- */
-let detailId = null;
+let detailId = null;   // 当前弹窗里的记录
+let focusId = null;    // 列表/侧栏高亮的记录（关闭弹窗后保留，方便回看）
 
 const PHASE_TAG = {
   done: { text: '校验通过', cls: '' },
@@ -716,6 +717,7 @@ function fmtClock(ms) {
 async function openDetail(id) {
   if (!id) return;
   detailId = id;
+  focusId = id;
   let full;
   try { full = await appApi.historyGet(id); } catch (e) { return toast('读取记录失败：' + e.message, 'err'); }
   if (!full) return toast('找不到这条记录', 'err');
@@ -793,10 +795,10 @@ async function openDetail(id) {
 /* 列表 / 侧栏里把当前记录标出来 */
 function markOpenRow() {
   document.querySelectorAll('#histList .hist').forEach((el) => {
-    el.classList.toggle('is-open', el.dataset.id === detailId);
+    el.classList.toggle('is-open', el.dataset.id === focusId);
   });
   document.querySelectorAll('#recentList .recent-item').forEach((el) => {
-    el.classList.toggle('is-open', el.dataset.id === detailId);
+    el.classList.toggle('is-open', el.dataset.id === focusId);
   });
 }
 
@@ -1102,6 +1104,7 @@ $('btnClearHist').addEventListener('click', async () => {
   if (!confirm('确定清空所有拷卡记录？（已导出的 PDF 文件不受影响）')) return;
   await appApi.historyClear();
   closeDetail();
+  focusId = null;
   renderHistory();
   toast('记录已清空');
 });
