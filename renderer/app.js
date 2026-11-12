@@ -621,13 +621,7 @@ function renderRecent() {
     </button>`;
   }).join('');
   box.querySelectorAll('.recent-item').forEach((b) => {
-    b.addEventListener('click', () => {
-      switchView('history');
-      requestAnimationFrame(() => {
-        const el = [...document.querySelectorAll('.hist')].find((x) => x.dataset.id === b.dataset.id);
-        if (el) el.scrollIntoView({ block: 'center' });
-      });
-    });
+    b.addEventListener('click', () => openDetail(b.dataset.id));
   });
 }
 async function renderHistory() {
@@ -662,18 +656,12 @@ async function renderHistory() {
 
   list.querySelectorAll('.hist').forEach((el, i) => {
     const h = S.history[i];
-    el.querySelector('[data-act="peek"]').addEventListener('click', async () => {
-      const full = await appApi.historyGet(h.id);
-      if (!full) return;
-      const msg = [
-        `任务 ${full.id}`,
-        `来源 ${full.sourcePath}`,
-        `目标 ${(full.dests || []).map((d) => d.path).join('\n     ')}`,
-        `文件 ${full.totalFiles} 个 / ${fmtBytes(full.totalBytes)}`,
-        `失败 ${full.failedFiles || 0} 个，异常记录 ${(full.errors || []).length} 条`,
-      ].join('\n');
-      alert(msg);
+    // 整行点击进详情；行内按钮交给各自的处理
+    el.addEventListener('click', (ev) => {
+      if (ev.target.closest('button')) return;
+      openDetail(h.id);
     });
+    el.querySelector('[data-act="peek"]').addEventListener('click', () => openDetail(h.id));
     el.querySelector('[data-act="pdf"]').addEventListener('click', async () => {
       try {
         const p = await appApi.exportPdf(h.id);
@@ -688,6 +676,141 @@ async function renderHistory() {
     });
   });
 }
+
+/* ---------------- 记录详情 ---------------- */
+let detailId = null;
+
+const PHASE_TAG = {
+  done: { text: '校验通过', cls: '' },
+  cancelled: { text: '已取消', cls: 'cancel' },
+  running: { text: '进行中', cls: '' },
+  failed: { text: '有异常', cls: 'fail' },
+  queued: { text: '排队中', cls: '' },
+};
+
+function fmtClock(ms) {
+  if (!ms) return '—';
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+async function openDetail(id) {
+  if (!id) return;
+  let full;
+  try { full = await appApi.historyGet(id); } catch (e) { return toast('读取记录失败：' + e.message, 'err'); }
+  if (!full) return toast('找不到这条记录', 'err');
+  detailId = id;
+
+  const phase = full.phase || 'done';
+  const tag = PHASE_TAG[phase] || { text: phase, cls: '' };
+  const name = full.project || (full.sourcePath || '').split(/[\\/]/).filter(Boolean).pop() || '未命名任务';
+  $('dtTitle').textContent = name;
+  $('dtId').textContent = full.dateText ? `${full.id} · ${full.dateText}` : full.id;
+  $('dtTag').className = 'tag ' + tag.cls;
+  $('dtTag').textContent = tag.text;
+
+  const dur = full.startedAt && full.endedAt ? full.endedAt - full.startedAt : 0;
+  const avg = dur > 0 ? (full.totalBytes || 0) / (dur / 1000) : 0;
+  const dests = full.dests || [];
+  const errors = full.errors || [];
+  const verifyText = full.verify === 'hash' ? `${String(full.algorithm || '').toUpperCase()} 哈希校验`
+    : full.verify === 'size' ? '文件尺寸比对' : '未校验';
+
+  const destHtml = dests.length ? dests.map((d) => `
+    <div class="dt-dest">
+      <div class="dt-dest-top">
+        <span class="dt-dest-path" title="${esc(d.path || '')}">${esc(d.path || '')}</span>
+        <span class="tag ${d.filesFailed || d.verifyFailed ? 'fail' : ''}">${esc(d.status || (d.filesFailed ? '有异常' : '完成'))}</span>
+      </div>
+      <div class="dt-dest-stats">
+        <span>完成 <b>${d.filesDone || 0}</b> 个</span>
+        <span>跳过 <b>${d.filesSkipped || 0}</b> 个</span>
+        <span class="${d.filesFailed ? 'bad' : ''}">写入失败 <b>${d.filesFailed || 0}</b></span>
+        <span class="${d.verifyFailed ? 'bad' : ''}">校验失败 <b>${d.verifyFailed || 0}</b></span>
+        <span>已拷贝 <b>${fmtBytes(d.copiedBytes || 0)}</b></span>
+      </div>
+    </div>`).join('') : '<div class="dt-empty">没有目标记录</div>';
+
+  const errHtml = errors.length
+    ? `<div class="dt-err">${errors.slice(0, 60).map((e) => `<div><span class="f">${esc(e.file || '（任务级）')}</span> — ${esc(e.message || '')}</div>`).join('')}</div>
+       ${errors.length > 60 ? `<div class="dt-empty">仅显示前 60 条，共 ${errors.length} 条</div>` : ''}`
+    : '<div class="dt-empty">没有异常</div>';
+
+  $('dtBody').innerHTML = `
+    <div class="dt-grid">
+      <div class="dt-col">
+        <div class="dt-row"><span class="dt-k">开始</span><span class="dt-v">${esc(fmtClock(full.startedAt))}</span></div>
+        <div class="dt-row"><span class="dt-k">结束</span><span class="dt-v">${esc(fmtClock(full.endedAt))}</span></div>
+        <div class="dt-row"><span class="dt-k">耗时</span><span class="dt-v">${fmtDur(dur)}${avg ? ' · 均速 ' + fmtSpeed(avg) : ''}</span></div>
+        <div class="dt-row"><span class="dt-k">文件</span><span class="dt-v">${full.totalFiles || 0} 个 · ${fmtBytes(full.totalBytes || 0)}</span></div>
+        <div class="dt-row"><span class="dt-k">失败</span><span class="dt-v">${full.failedFiles || 0} 个${full.skippedFiles ? ` · 跳过 ${full.skippedFiles} 个` : ''}</span></div>
+        <div class="dt-row"><span class="dt-k">校验</span><span class="dt-v">${esc(verifyText)}</span></div>
+      </div>
+      <div class="dt-col">
+        <div class="dt-row"><span class="dt-k">来源</span><span class="dt-v mono">${esc(full.sourcePath || '—')}</span></div>
+        <div class="dt-row"><span class="dt-k">卡片</span><span class="dt-v">${esc(full.camera || '—')}</span></div>
+        <div class="dt-row"><span class="dt-k">模板</span><span class="dt-v mono">${esc(full.template || '—')}</span></div>
+        <div class="dt-row"><span class="dt-k">清单</span><span class="dt-v">${full.manifestCount || 0} 条${full.manifestCount > 500 ? '（详情页仅存前 500）' : ''}</span></div>
+        <div class="dt-row"><span class="dt-k">报告</span><span class="dt-v">${full.reportPath ? '已生成' : '未生成'}</span></div>
+      </div>
+    </div>
+    <div class="dt-sec">目标路径（${dests.length}）</div>
+    ${destHtml}
+    <div class="dt-sec">异常记录（${errors.length}）</div>
+    ${errHtml}
+  `;
+
+  const reportPath = full.reportPath || '';
+  const rp = $('dtReport');
+  rp.textContent = reportPath || '尚未生成 PDF 报告';
+  rp.title = reportPath || '';
+  $('dtOpenFolder').classList.toggle('hidden', !reportPath);
+
+  $('detailMask').classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+function closeDetail() {
+  $('detailMask').classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  detailId = null;
+}
+
+$('dtClose').addEventListener('click', closeDetail);
+$('dtDone').addEventListener('click', closeDetail);
+$('detailMask').addEventListener('click', (ev) => { if (ev.target.id === 'detailMask') closeDetail(); });
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !$('detailMask').classList.contains('hidden')) closeDetail();
+});
+$('dtOpenFolder').addEventListener('click', async () => {
+  if (!detailId) return;
+  const full = await appApi.historyGet(detailId);
+  if (full && full.reportPath) appApi.reveal(full.reportPath);
+});
+$('dtPdf').addEventListener('click', async () => {
+  if (!detailId) return;
+  try {
+    const p = await appApi.exportPdf(detailId);
+    if (!p) return;
+    toast('报告已保存：' + p);
+    // 记录上的报告路径立刻刷新，方便直接打开文件夹
+    const full = await appApi.historyGet(detailId);
+    if (full) {
+      $('dtReport').textContent = p;
+      $('dtReport').title = p;
+      $('dtOpenFolder').classList.remove('hidden');
+    }
+    loadHistory();
+  } catch (e) { toast('导出失败：' + e.message, 'err'); }
+});
+$('dtCsv').addEventListener('click', async () => {
+  if (!detailId) return;
+  try {
+    const p = await appApi.exportCsv(detailId);
+    if (p) toast('CSV 已保存：' + p);
+  } catch (e) { toast('导出失败：' + e.message, 'err'); }
+});
 
 /* ---------------- 设置 ---------------- */
 async function loadSettingsUI() {
@@ -802,7 +925,9 @@ function renderUpdate() {
     ready: '重启安装',
     installing: '正在安装…',
     uptodate: '已是最新',
+    error: '检查失败 · 重试',
   }[st] || '检查更新';
+  side.title = st === 'error' ? ('更新检查失败：' + (upd.error || '未知错误')) : '检查是否有新版本';
   if (st === 'uptodate') {
     setTimeout(() => { if (upd.status === 'uptodate') { sideText.textContent = '检查更新'; } }, 4000);
   }
@@ -839,10 +964,20 @@ function renderUpdate() {
 async function checkUpdate() {
   $('updateHint').textContent = '正在检查更新…';
   $('updateHint').style.color = 'var(--tx-3)';
+  const sideText = $('sideUpdateText');
+  sideText.textContent = '检查中…';
   const r = await appApi.update.check();
-  if (!r.ok) { toast(r.error || '检查失败', 'err'); renderUpdate(); return; }
-  if (r.uptodate) toast(r.skipped ? '已跳过该版本' : '当前已是最新版本');
-  else toast(`发现新版本 ${r.version}`);
+  if (!r.ok) {
+    toast(r.error || '检查失败', 'err');
+    sideText.textContent = '检查失败 · 重试';
+    renderUpdate();
+    // 设置页可能停在这一页，让失败原因就地可见
+    $('updateHint').textContent = '更新检查失败：' + (r.error || '未知错误');
+    $('updateHint').style.color = 'var(--red)';
+    return;
+  }
+  if (r.uptodate) toast(r.skipped ? '已跳过该版本' : `当前已是最新版本（${r.version || ''}）`);
+  else toast(`发现新版本 ${r.version}，可点击下载`);
   renderUpdate();
 }
 

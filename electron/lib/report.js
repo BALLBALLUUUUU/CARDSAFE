@@ -29,6 +29,9 @@ function buildReportHtml(task, opts = {}) {
     errors: task.errors || [],
     manifest: task.manifest || [],
   };
+  // PDF 自身的存放位置（导出时传入），让报告本身能指回文件夹
+  const reportPath = String(opts.reportPath || task.reportPath || '').trim();
+  const reportDir = reportPath ? path.dirname(reportPath) : '';
   const duration = (t.endedAt && t.startedAt) ? (t.endedAt - t.startedAt) : 0;
   const avg = duration > 0 ? (t.totalBytes / (duration / 1000)) : 0;
   const statusColor = t.phase === 'done' ? '#128a5b' : t.phase === 'cancelled' ? '#8a6d12' : '#b3261e';
@@ -118,6 +121,8 @@ function buildReportHtml(task, opts = {}) {
       <tr><td class="k">素材容量</td><td class="v">${formatBytes(t.totalBytes)}</td></tr>
       <tr><td class="k">耗时 / 均速</td><td class="v">${formatDuration(duration)} / ${formatSpeed(avg)}</td></tr>
       <tr><td class="k">校验方式</td><td class="v">${t.verify === 'hash' ? esc((t.algorithm || '').toUpperCase()) + ' 哈希校验' : t.verify === 'size' ? '文件尺寸比对' : '未校验'}</td></tr>
+      ${reportPath ? `<tr><td class="k">报告文件</td><td class="mono v">${esc(path.basename(reportPath))}</td></tr>` : ''}
+      ${reportDir ? `<tr><td class="k">报告文件夹</td><td class="mono v">${esc(reportDir)}</td></tr>` : ''}
     </table></div>
   </div>
 

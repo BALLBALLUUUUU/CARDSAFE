@@ -344,7 +344,7 @@ async function pump() {
       const dir = settings.reportDir || path.join(app.getPath('documents'), 'CARDSAFE 拷卡报告');
       await fsp.mkdir(dir, { recursive: true });
       reportPath = path.join(dir, `${job.id}_${state.phase === 'done' ? 'OK' : 'FAIL'}.pdf`);
-      await exportPdf(buildReportHtml({ ...full, dateText: job.dateText }), reportPath, BrowserWindow);
+      await exportPdf(buildReportHtml({ ...full, dateText: job.dateText }, { reportPath }), reportPath, BrowserWindow);
       store.updateHistory(job.id, { reportPath });
     } catch (e) {
       logTo({ level: 'error', msg: '报告导出失败：' + e.message });
@@ -510,7 +510,7 @@ function registerIpc() {
       });
       if (!out) return null;
     }
-    await exportPdf(buildReportHtml(h), out, BrowserWindow);
+    await exportPdf(buildReportHtml(h, { reportPath: out }), out, BrowserWindow);
     store.updateHistory(id, { reportPath: out });
     return out;
   });
@@ -532,7 +532,7 @@ function registerIpc() {
     const h = store.getHistory(id);
     if (!h) return null;
     const tmp = path.join(os.tmpdir(), `cardsafe-report-${id}.html`);
-    await fsp.writeFile(tmp, buildReportHtml(h), 'utf8');
+    await fsp.writeFile(tmp, buildReportHtml(h, { reportPath: h.reportPath || '' }), 'utf8');
     const w = new BrowserWindow({
       width: 940, height: 900, title: `拷卡报告 ${id}`,
       webPreferences: { javascript: false, sandbox: true },
