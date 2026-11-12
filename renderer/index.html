@@ -249,6 +249,26 @@
           <div class="hist-summary" id="histSummary"></div>
           <button class="btn ghost sm" id="btnClearHist">清空记录</button>
         </div>
+        <div class="det hidden" id="histDetail">
+          <div class="det-head">
+            <div class="det-main">
+              <div class="det-title" id="dtTitle">记录详情</div>
+              <div class="det-sub mono" id="dtId">—</div>
+            </div>
+            <span class="tag" id="dtTag">—</span>
+            <button class="det-x" id="dtClose" title="收起（Esc）">✕</button>
+          </div>
+          <div class="det-body" id="dtBody"></div>
+          <div class="det-foot">
+            <span class="mf-path mono ell" id="dtReport" title="">—</span>
+            <div class="mf-right">
+              <button class="btn ghost sm hidden" id="dtOpenFolder">打开报告文件夹</button>
+              <button class="btn ghost sm" id="dtPdf">导出 PDF</button>
+              <button class="btn ghost sm" id="dtCsv">导出 CSV</button>
+              <button class="btn sm" id="dtDone">收起</button>
+            </div>
+          </div>
+        </div>
         <div class="hist-list" id="histList"></div>
       </section>
 
@@ -434,29 +454,6 @@
 
 <div class="toast-wrap" id="toastWrap"></div>
 
-<!-- ============================ 记录详情 ============================ -->
-<div class="modal-mask hidden" id="detailMask" role="dialog" aria-modal="true" aria-labelledby="dtTitle">
-  <div class="modal">
-    <div class="modal-head">
-      <div class="mh-main">
-        <div class="mh-title" id="dtTitle">记录详情</div>
-        <div class="mh-sub mono" id="dtId">—</div>
-      </div>
-      <span class="tag" id="dtTag">—</span>
-      <button class="modal-x" id="dtClose" title="关闭（Esc）">✕</button>
-    </div>
-    <div class="modal-body" id="dtBody"></div>
-    <div class="modal-foot">
-      <span class="mf-path mono ell" id="dtReport" title="">—</span>
-      <div class="mf-right">
-        <button class="btn ghost sm hidden" id="dtOpenFolder">打开报告文件夹</button>
-        <button class="btn ghost sm" id="dtPdf">导出 PDF</button>
-        <button class="btn ghost sm" id="dtCsv">导出 CSV</button>
-        <button class="btn sm" id="dtDone">关闭</button>
-      </div>
-    </div>
-  </div>
-</div>
 <script src="app.js"></script>
 </body>
 </html>

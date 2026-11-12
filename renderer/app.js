@@ -615,13 +615,17 @@ function renderRecent() {
     const t = h.endedAt ? new Date(h.endedAt) : (h.startedAt ? new Date(h.startedAt) : null);
     const hm = t ? `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '--:--';
     const ok = h.phase === 'done';
-    return `<button class="recent-item" data-id="${esc(h.id)}">
+    return `<button class="recent-item${h.id === detailId ? ' is-open' : ''}" data-id="${esc(h.id)}">
       <span class="ri-top"><i class="ri-dot ${ok ? '' : 'fail'}"></i><span class="ri-name">${esc(name)}</span></span>
       <span class="ri-meta">${hm} · ${h.totalFiles || 0} 个 · ${fmtBytes(h.totalBytes || 0)}</span>
     </button>`;
   }).join('');
   box.querySelectorAll('.recent-item').forEach((b) => {
-    b.addEventListener('click', () => openDetail(b.dataset.id));
+    b.addEventListener('click', () => {
+      // 侧栏点条目：切到「记录」页，详情直接展开在右侧内容区
+      switchView('history');
+      openDetail(b.dataset.id);
+    });
   });
 }
 async function renderHistory() {
@@ -637,7 +641,7 @@ async function renderHistory() {
     const tagCls = phase === 'done' ? '' : phase === 'cancelled' ? 'cancel' : 'fail';
     const tagText = { done: '校验通过', cancelled: '已取消', running: '进行中', failed: '有异常', queued: '排队中' }[phase] || phase;
     const dur = h.startedAt && h.endedAt ? ` · 耗时 ${fmtDur(h.endedAt - h.startedAt)}` : '';
-    return `<div class="hist" data-id="${esc(h.id)}">
+    return `<div class="hist${h.id === detailId ? ' is-open' : ''}" data-id="${esc(h.id)}">
       <span class="hist-badge ${badgeCls}"></span>
       <div class="hist-main">
         <div class="hist-title">${esc(h.project || h.sourcePath.split(/[\\/]/).pop())}
@@ -697,10 +701,10 @@ function fmtClock(ms) {
 
 async function openDetail(id) {
   if (!id) return;
+  detailId = id;
   let full;
   try { full = await appApi.historyGet(id); } catch (e) { return toast('读取记录失败：' + e.message, 'err'); }
   if (!full) return toast('找不到这条记录', 'err');
-  detailId = id;
 
   const phase = full.phase || 'done';
   const tag = PHASE_TAG[phase] || { text: phase, cls: '' };
@@ -767,21 +771,31 @@ async function openDetail(id) {
   rp.title = reportPath || '';
   $('dtOpenFolder').classList.toggle('hidden', !reportPath);
 
-  $('detailMask').classList.remove('hidden');
-  document.body.classList.add('modal-open');
+  $('histDetail').classList.remove('hidden');
+  markOpenRow();
+  $('scrollArea').scrollTop = 0;
+}
+
+/* 列表 / 侧栏里把当前记录标出来 */
+function markOpenRow() {
+  document.querySelectorAll('#histList .hist').forEach((el) => {
+    el.classList.toggle('is-open', el.dataset.id === detailId);
+  });
+  document.querySelectorAll('#recentList .recent-item').forEach((el) => {
+    el.classList.toggle('is-open', el.dataset.id === detailId);
+  });
 }
 
 function closeDetail() {
-  $('detailMask').classList.add('hidden');
-  document.body.classList.remove('modal-open');
+  $('histDetail').classList.add('hidden');
   detailId = null;
+  markOpenRow();
 }
 
 $('dtClose').addEventListener('click', closeDetail);
 $('dtDone').addEventListener('click', closeDetail);
-$('detailMask').addEventListener('click', (ev) => { if (ev.target.id === 'detailMask') closeDetail(); });
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && !$('detailMask').classList.contains('hidden')) closeDetail();
+  if (ev.key === 'Escape' && !$('histDetail').classList.contains('hidden')) closeDetail();
 });
 $('dtOpenFolder').addEventListener('click', async () => {
   if (!detailId) return;
@@ -912,13 +926,9 @@ function renderUpdate() {
   act.textContent = st === 'ready' ? '重启并安装' : '下载更新';
   $('ubSkip').classList.toggle('hidden', st !== 'available');
 
-  // 左下角常驻入口
-  const side = $('btnSideUpdate');
-  const sideText = $('sideUpdateText');
-  side.classList.toggle('has-update', ['available', 'ready'].includes(st));
-  side.classList.toggle('checking', st === 'checking' || st === 'downloading');
-  side.disabled = ['checking', 'downloading', 'installing'].includes(st);
-  sideText.textContent = {
+  // 左下角常驻入口 + 设置页按钮：两处状态、文案、可点行为完全一致
+  const busy = ['checking', 'downloading', 'installing'].includes(st);
+  const label = {
     checking: '检查中…',
     available: `发现 v${upd.version}`,
     downloading: `下载中 ${Math.round((upd.percent || 0) * 100)}%`,
@@ -927,9 +937,36 @@ function renderUpdate() {
     uptodate: '已是最新',
     error: '检查失败 · 重试',
   }[st] || '检查更新';
+  const hasUpdate = ['available', 'ready'].includes(st);
+  const isChecking = st === 'checking' || st === 'downloading';
+
+  const side = $('btnSideUpdate');
+  const sideText = $('sideUpdateText');
+  side.classList.toggle('has-update', hasUpdate);
+  side.classList.toggle('checking', isChecking);
+  side.classList.toggle('is-error', st === 'error');
+  side.disabled = busy;
+  sideText.textContent = label;
   side.title = st === 'error' ? ('更新检查失败：' + (upd.error || '未知错误')) : '检查是否有新版本';
+
+  const sbtn = $('btnCheckUpdate');
+  if (sbtn) {
+    sbtn.classList.toggle('has-update', hasUpdate);
+    sbtn.classList.toggle('checking', isChecking);
+    sbtn.classList.toggle('is-error', st === 'error');
+    sbtn.disabled = busy;
+    sbtn.textContent = label;
+    sbtn.title = st === 'error'
+      ? ('更新检查失败：' + (upd.error || '未知错误') + '（点击重试）')
+      : '检查是否有新版本';
+  }
   if (st === 'uptodate') {
-    setTimeout(() => { if (upd.status === 'uptodate') { sideText.textContent = '检查更新'; } }, 4000);
+    setTimeout(() => {
+      if (upd.status === 'uptodate') {
+        sideText.textContent = '检查更新';
+        if (sbtn) sbtn.textContent = '检查更新';
+      }
+    }, 4000);
   }
 
   // 设置页
@@ -962,18 +999,19 @@ function renderUpdate() {
 }
 
 async function checkUpdate() {
-  $('updateHint').textContent = '正在检查更新…';
-  $('updateHint').style.color = 'var(--tx-3)';
-  const sideText = $('sideUpdateText');
-  sideText.textContent = '检查中…';
-  const r = await appApi.update.check();
-  if (!r.ok) {
-    toast(r.error || '检查失败', 'err');
-    sideText.textContent = '检查失败 · 重试';
+  // 先在本地切到「检查中」，两处按钮立刻有反馈（不等 IPC 往返）
+  upd = { ...upd, status: 'checking', error: '' };
+  renderUpdate();
+  let r;
+  try {
+    r = await appApi.update.check();
+  } catch (e) {
+    r = { ok: false, error: e.message };
+  }
+  if (!r || !r.ok) {
+    upd = { ...upd, status: 'error', error: (r && r.error) || '未知错误' };
     renderUpdate();
-    // 设置页可能停在这一页，让失败原因就地可见
-    $('updateHint').textContent = '更新检查失败：' + (r.error || '未知错误');
-    $('updateHint').style.color = 'var(--red)';
+    toast('更新检查失败：' + ((r && r.error) || '未知错误'), 'err');
     return;
   }
   if (r.uptodate) toast(r.skipped ? '已跳过该版本' : `当前已是最新版本（${r.version || ''}）`);
@@ -1032,6 +1070,7 @@ $('btnToggleLog').addEventListener('click', () => {
 $('btnClearHist').addEventListener('click', async () => {
   if (!confirm('确定清空所有拷卡记录？（已导出的 PDF 文件不受影响）')) return;
   await appApi.historyClear();
+  closeDetail();
   renderHistory();
   toast('记录已清空');
 });
@@ -1094,7 +1133,16 @@ $('transparentLevel').addEventListener('input', () => {
   opacityTimer = setTimeout(() => { appApi.setOpacityLevel(lv).catch(() => {}); }, 240);
 });
 
-$('btnCheckUpdate').addEventListener('click', async () => { await saveSettings(); checkUpdate(); });
+$('btnCheckUpdate').addEventListener('click', async () => {
+  if (upd.status === 'ready') return installUpdate();
+  if (upd.status === 'available') return downloadUpdate();
+  if (['downloading', 'installing', 'checking'].includes(upd.status)) return;
+  // 先给反馈，再落盘更新源，最后真正发起检查
+  upd = { ...upd, status: 'checking', error: '' };
+  renderUpdate();
+  await saveSettings();
+  await checkUpdate();
+});
 $('btnDownloadUpdate').addEventListener('click', downloadUpdate);
 $('btnInstallUpdate').addEventListener('click', installUpdate);
 $('ubAction').addEventListener('click', () => {
