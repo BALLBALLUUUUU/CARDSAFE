@@ -68,13 +68,14 @@ function expandTpl(tpl, ctx = {}) {
 
 /* ---------------- 导航 ---------------- */
 const TITLES = { copy: '拷卡', history: '拷卡记录', settings: '设置', about: '关于' };
+let histRenderPromise = Promise.resolve();
 function switchView(v) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('is-active', b.dataset.view === v));
   document.querySelectorAll('.view').forEach((s) => s.classList.toggle('is-active', s.id === 'view-' + v));
   $('viewTitle').textContent = TITLES[v] || '';
   $('btnRefresh').style.visibility = v === 'copy' ? 'visible' : 'hidden';
   $('scrollArea').scrollTop = 0;
-  if (v === 'history') renderHistory();
+  if (v === 'history') histRenderPromise = renderHistory();
   if (v === 'settings') loadSettingsUI();
   if (v === 'about') renderAbout();
 }
@@ -621,10 +622,13 @@ function renderRecent() {
     </button>`;
   }).join('');
   box.querySelectorAll('.recent-item').forEach((b) => {
-    b.addEventListener('click', () => {
-      // 侧栏点条目：切到「记录」页，详情直接展开在右侧内容区
+    b.addEventListener('click', async () => {
+      // 侧栏点条目：进「记录」页并定位到这条，同时直接打开详情
+      const id = b.dataset.id;
       switchView('history');
-      openDetail(b.dataset.id);
+      await histRenderPromise;
+      await openDetail(id);
+      scrollToHistRow(id);
     });
   });
 }
@@ -679,6 +683,16 @@ async function renderHistory() {
       } catch (e) { toast('导出失败：' + e.message, 'err'); }
     });
   });
+}
+
+/* 把某条记录滚到可视区中间（用于侧栏跳转，弹层关闭后仍停在这条） */
+function scrollToHistRow(id) {
+  const sa = $('scrollArea');
+  const el = [...document.querySelectorAll('#histList .hist')].find((x) => x.dataset.id === id);
+  if (!sa || !el) return;
+  const r = el.getBoundingClientRect();
+  const s = sa.getBoundingClientRect();
+  sa.scrollTop += Math.round(r.top - s.top - s.height / 2 + r.height / 2);
 }
 
 /* ---------------- 记录详情 ---------------- */
@@ -771,9 +785,9 @@ async function openDetail(id) {
   rp.title = reportPath || '';
   $('dtOpenFolder').classList.toggle('hidden', !reportPath);
 
-  $('histDetail').classList.remove('hidden');
+  $('detailMask').classList.remove('hidden');
+  document.body.classList.add('modal-open');
   markOpenRow();
-  $('scrollArea').scrollTop = 0;
 }
 
 /* 列表 / 侧栏里把当前记录标出来 */
@@ -787,15 +801,17 @@ function markOpenRow() {
 }
 
 function closeDetail() {
-  $('histDetail').classList.add('hidden');
+  $('detailMask').classList.add('hidden');
+  document.body.classList.remove('modal-open');
   detailId = null;
   markOpenRow();
 }
 
 $('dtClose').addEventListener('click', closeDetail);
 $('dtDone').addEventListener('click', closeDetail);
+$('detailMask').addEventListener('click', (ev) => { if (ev.target.id === 'detailMask') closeDetail(); });
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && !$('histDetail').classList.contains('hidden')) closeDetail();
+  if (ev.key === 'Escape' && !$('detailMask').classList.contains('hidden')) closeDetail();
 });
 $('dtOpenFolder').addEventListener('click', async () => {
   if (!detailId) return;
@@ -900,6 +916,10 @@ function renderAbout() {
 
 /* ---------------- 软件更新 ---------------- */
 let upd = { status: 'idle', current: '', version: '', notes: '', size: 0, received: 0, percent: 0, speed: 0, error: '', notesUrl: '' };
+// 「检查中…」至少可见的时长，避免请求太快导致看起来像没点上
+const CHECK_MIN_MS = 900;
+let checkUiUntil = 0;
+let checkFlushTimer = null;
 
 function renderUpdate() {
   const st = upd.status || 'idle';
@@ -1000,23 +1020,34 @@ function renderUpdate() {
 
 async function checkUpdate() {
   // 先在本地切到「检查中」，两处按钮立刻有反馈（不等 IPC 往返）
+  const startedAt = Date.now();
+  checkUiUntil = startedAt + CHECK_MIN_MS;
   upd = { ...upd, status: 'checking', error: '' };
   renderUpdate();
+  toast('正在检查更新…');
   let r;
   try {
     r = await appApi.update.check();
   } catch (e) {
     r = { ok: false, error: e.message };
   }
-  if (!r || !r.ok) {
-    upd = { ...upd, status: 'error', error: (r && r.error) || '未知错误' };
+  // 检查再快也让「检查中」至少显示 CHECK_MIN_MS，避免看着像没点上
+  const remain = checkUiUntil - Date.now();
+  if (remain > 0) await new Promise((res) => setTimeout(res, remain));
+  let st = null;
+  try { st = await appApi.update.state(); } catch { /* 旧版本没有该接口时忽略 */ }
+  clearTimeout(checkFlushTimer);
+  if (st) { upd = st; renderUpdate(); }
+  else {
+    upd = { ...upd, status: r && r.ok ? 'uptodate' : 'error', error: (r && r.error) || '' };
     renderUpdate();
+  }
+  if (!r || !r.ok) {
     toast('更新检查失败：' + ((r && r.error) || '未知错误'), 'err');
     return;
   }
   if (r.uptodate) toast(r.skipped ? '已跳过该版本' : `当前已是最新版本（${r.version || ''}）`);
   else toast(`发现新版本 ${r.version}，可点击下载`);
-  renderUpdate();
 }
 
 async function downloadUpdate() {
@@ -1180,10 +1211,17 @@ $('btnSideUpdate').addEventListener('click', async () => {
 });
 
 appApi.update.onEvent((payload) => {
-  if (payload && payload.state) {
-    upd = payload.state;
-    renderUpdate();
+  const st = payload && payload.state;
+  if (!st) return;
+  // 检查中的最终结果先压住，等「检查中…」动画走满再切换
+  const remain = checkUiUntil - Date.now();
+  if (remain > 0 && st.status !== 'checking') {
+    clearTimeout(checkFlushTimer);
+    checkFlushTimer = setTimeout(() => { upd = st; renderUpdate(); }, remain);
+    return;
   }
+  upd = st;
+  renderUpdate();
 });
 
 appApi.onQueue((q) => {
