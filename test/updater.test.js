@@ -119,8 +119,33 @@ function serve(dir) {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
   assert.ok(matchGitHubAsset('CARDSAFE-1.3.4-arm64-mac.zip'), 'mac arm64 zip 应匹配');
   assert.ok(!matchGitHubAsset('CardSafe-1.3.4-win-x64-portable.zip'), 'win zip 不该匹配 mac');
+  assert.ok(matchGitHubAsset('CARDSAFE-1.3.9-arm64.dmg'), 'mac dmg 也应匹配（Release 里可能只有 dmg）');
   Object.defineProperty(process, 'platform', { value: savedPlatform, configurable: true });
-  ok('GitHub 资源匹配（win 便携 zip / blockmap 排除）');
+  ok('GitHub 资源匹配（win 便携 zip / mac dmg / blockmap 排除）');
+
+  /* ===== 2d. 只有 dmg 的 Release 也能解析；zip+dmg 同时存在时优先 zip ===== */
+  if (process.platform === 'darwin') {
+    const dmgOnly = normalizeManifest({
+      tag_name: 'V1.3.9',
+      assets: [
+        { name: 'CARDSAFE-1.3.9-arm64.dmg', browser_download_url: 'https://x/a.dmg', size: 99 },
+        { name: 'CARDSAFE.Setup.1.3.9.exe', browser_download_url: 'https://x/a.exe', size: 80 },
+      ],
+    });
+    assertEq(dmgOnly.artifact.url, 'https://x/a.dmg', '只有 dmg 时选 dmg');
+    const both = normalizeManifest({
+      tag_name: 'V1.3.9',
+      assets: [
+        { name: 'CARDSAFE-1.3.9-arm64.dmg', browser_download_url: 'https://x/a.dmg', size: 99 },
+        { name: 'CARDSAFE-1.3.9-arm64-mac.zip', browser_download_url: 'https://x/b.zip', size: 91 },
+      ],
+    });
+    assertEq(both.artifact.url, 'https://x/b.zip', 'zip 与 dmg 都在时优先 zip');
+    const script = require('../electron/lib/updater').macInstallScript();
+    assert.ok(/hdiutil attach/.test(script), '安装脚本要能挂载 dmg');
+    assert.ok(script.includes('*.dmg'), '安装脚本要识别 dmg 分支');
+    ok('macOS 更新包：dmg 兜底 + 安装脚本支持挂载');
+  }
 
   /* ===== 3. 检查 → 下载 → 校验 ===== */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cardsafe-upd-'));
@@ -246,6 +271,26 @@ function serve(dir) {
     }
     assertEq(marker, 'new', '替换脚本应把 .app 换成新版本');
     ok('macOS 原地替换脚本（真实执行）');
+
+    // 同一脚本的 dmg 分支：挂载 → 拷贝 → 卸载
+    const dmgSrc = path.join(box, 'dmg-src');
+    await fsp.mkdir(dmgSrc, { recursive: true });
+    await run('ditto', [stage, path.join(dmgSrc, 'Demo.app')]);
+    const dmg = path.join(box, 'new.dmg');
+    await run('hdiutil', ['create', '-volname', 'DemoUpdate', '-srcfolder', dmgSrc, '-ov', '-format', 'UDZO', dmg]);
+
+    const oldApp2 = path.join(box, 'Demo2.app');
+    await fsp.mkdir(path.join(oldApp2, 'Contents'), { recursive: true });
+    await fsp.writeFile(path.join(oldApp2, 'Contents', 'marker.txt'), 'old');
+    await run('/bin/bash', [script, '999999', dmg, oldApp2]).catch(() => {});
+    let marker2 = '';
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+      try { marker2 = (await fsp.readFile(path.join(oldApp2, 'Contents', 'marker.txt'), 'utf8')).trim(); } catch {}
+      if (marker2 === 'new') break;
+    }
+    assertEq(marker2, 'new', 'dmg 更新包也应挂载后替换 .app');
+    ok('macOS dmg 更新包挂载替换（真实执行）');
     await fsp.rm(box, { recursive: true, force: true }).catch(() => {});
   }
 

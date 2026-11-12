@@ -101,7 +101,11 @@ function matchGitHubAsset(name) {
     if (/\.exe$/.test(n)) return true;                       // NSIS 安装包优先
     return /\.zip$/.test(n) && (n.includes('win') || n.includes('windows')); // 便携 zip 兜底
   }
-  if (process.platform === 'darwin') return /\.zip$/.test(n) && (n.includes(process.arch) || n.includes('universal'));
+  if (process.platform === 'darwin') {
+    // 自动更新优先用 zip；只有 dmg 时也接受（安装脚本会挂载后替换）
+    if (/\.zip$/.test(n) && (n.includes(process.arch) || n.includes('universal'))) return true;
+    return /\.dmg$/.test(n);
+  }
   return /\.(zip|appimage|tar\.gz)$/.test(n);
 }
 
@@ -133,10 +137,23 @@ function normalizeManifest(raw) {
     const assets = Array.isArray(raw.assets) ? raw.assets : [];
     const cands = assets.filter((a) => matchGitHubAsset(a.name || ''));
     // Windows：优先选 NSIS 安装包（支持 /S 静默升级），便携 exe 只作兜底
+    // macOS：优先本机架构的 zip，其次 universal zip，最后才用 dmg
+    if (process.platform === 'darwin') {
+      const rank = (a) => {
+        const n = (a.name || '').toLowerCase();
+        if (/\.zip$/.test(n) && n.includes(process.arch)) return 0;
+        if (/\.zip$/.test(n) && n.includes('universal')) return 1;
+        if (/\.zip$/.test(n)) return 2;
+        if (/\.dmg$/.test(n) && n.includes(process.arch)) return 3;
+        if (/\.dmg$/.test(n)) return 4;
+        return 9;
+      };
+      cands.sort((a, b) => rank(a) - rank(b));
+    }
     const hit = (process.platform === 'win32')
       ? (cands.find((a) => /setup|install/i.test(a.name || '')) || cands[0])
       : cands[0];
-    if (!hit) throw new Error(`该 Release 里没有适配 ${platformKey()} 的安装包`);
+    if (!hit) throw new Error(`该 Release 里没有适配 ${platformKey()} 的安装包（macOS 需要 .zip 或 .dmg）`);
     const digest = String(hit.digest || '').replace(/^sha256:/i, '').toLowerCase();
     return {
       source: 'github',
@@ -211,18 +228,35 @@ async function downloadTo(url, destPath, { onProgress, expectedSize } = {}) {
 function macInstallScript() {
   return `#!/bin/bash
 set -u
-APP_PID="$1"; ZIP_FILE="$2"; TARGET_APP="$3"
+APP_PID="$1"; PKG_FILE="$2"; TARGET_APP="$3"
 LOG="/tmp/cardsafe-update.log"
 echo "[$(date)] 等待进程 $APP_PID 退出" > "$LOG"
 for i in $(seq 1 300); do
   kill -0 "$APP_PID" 2>/dev/null || break
   sleep 0.4
 done
-TMP_DIR=$(mktemp -d "/tmp/cardsafe-update.XXXXXX") || exit 1
-echo "[$(date)] 解压 $ZIP_FILE" >> "$LOG"
-ditto -x -k "$ZIP_FILE" "$TMP_DIR" >> "$LOG" 2>&1 || exit 1
-NEW_APP=$(find "$TMP_DIR" -maxdepth 2 -name "*.app" -type d | head -1)
-if [ -z "$NEW_APP" ]; then echo "压缩包里没有 .app" >> "$LOG"; exit 1; fi
+MNT=""
+TMP_DIR=""
+cleanup() {
+  if [ -n "$MNT" ]; then hdiutil detach "$MNT" -quiet >> "$LOG" 2>&1; rmdir "$MNT" 2>/dev/null; fi
+  if [ -n "$TMP_DIR" ]; then rm -rf "$TMP_DIR"; fi
+}
+trap cleanup EXIT
+case "$PKG_FILE" in
+  *.dmg|*.DMG)
+    MNT=$(mktemp -d "/tmp/cardsafe-dmg.XXXXXX") || exit 1
+    echo "[$(date)] 挂载 $PKG_FILE" >> "$LOG"
+    hdiutil attach "$PKG_FILE" -nobrowse -readonly -mountpoint "$MNT" -quiet >> "$LOG" 2>&1 || exit 1
+    NEW_APP=$(find "$MNT" -maxdepth 2 -name "*.app" -type d | head -1)
+    ;;
+  *)
+    TMP_DIR=$(mktemp -d "/tmp/cardsafe-update.XXXXXX") || exit 1
+    echo "[$(date)] 解压 $PKG_FILE" >> "$LOG"
+    ditto -x -k "$PKG_FILE" "$TMP_DIR" >> "$LOG" 2>&1 || exit 1
+    NEW_APP=$(find "$TMP_DIR" -maxdepth 2 -name "*.app" -type d | head -1)
+    ;;
+esac
+if [ -z "$NEW_APP" ]; then echo "安装包里没有 .app" >> "$LOG"; exit 1; fi
 case "$TARGET_APP" in
   *.app) ;;
   *) echo "目标不是 .app 包：$TARGET_APP" >> "$LOG"; exit 1 ;;
@@ -231,7 +265,6 @@ echo "[$(date)] 替换 $TARGET_APP" >> "$LOG"
 rm -rf "$TARGET_APP" >> "$LOG" 2>&1
 ditto "$NEW_APP" "$TARGET_APP" >> "$LOG" 2>&1 || exit 1
 xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null
-rm -rf "$TMP_DIR"
 echo "[$(date)] 完成，重新启动" >> "$LOG"
 open "$TARGET_APP"
 `;
@@ -379,11 +412,7 @@ class Updater {
     }
 
     if (process.platform === 'darwin') {
-      if (/\.dmg$/i.test(this.filePath)) {
-        await require('electron').shell.openPath(this.filePath);
-        this.setState({ status: 'ready' });
-        return { ok: true, mode: 'dmg-manual' };
-      }
+      // zip 直接解压替换；dmg 由安装脚本挂载后替换，走同一条路径
       const targetApp = path.resolve(path.dirname(process.execPath), '..', '..');
       if (!targetApp.endsWith('.app')) throw new Error('无法定位应用包路径，请手动安装');
       // 只允许替换可写的 .app（排除从只读 DMG 直接运行的情况）
