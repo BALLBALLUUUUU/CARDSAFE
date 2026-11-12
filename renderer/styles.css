@@ -166,6 +166,10 @@ body.win .sidebar{padding-top:14px;}
 .nav-item.is-active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
 .nav-item svg{opacity:.9;}
 
+/* 侧栏里可点区域必须显式退出窗口拖拽区，否则真实鼠标点击会被当成拖窗口 */
+.recent-list,.recent-item,.recent-empty,.sidebar-foot,.side-update,.queue-pill,.ver{
+  -webkit-app-region:no-drag;
+}
 .sidebar-foot{margin-top:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
 .queue-pill{
   display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--tx-3);
